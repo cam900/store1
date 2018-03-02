@@ -24,7 +24,7 @@ ADDRESS_MAP_START(kaneko_grap2_device::grap2_map)
 	AM_RANGE(0x000c10, 0x000c11) AM_READWRITE(framebuffer1_fbbright1_r, framebuffer1_fbbright1_w )
 	AM_RANGE(0x000c12, 0x000c13) AM_READWRITE(framebuffer1_fbbright2_r, framebuffer1_fbbright2_w )
 	AM_RANGE(0x000c18, 0x000c1b) AM_WRITE(regs1_address_w)
-	AM_RANGE(0x000c1c, 0x000c1d) AM_WRITE(brightreg_w)
+	AM_RANGE(0x000c1c, 0x000c1d) AM_WRITE(regs2_w)
 	AM_RANGE(0x000c1e, 0x000c1f) AM_WRITE(regs1_go_w)
 	AM_RANGE(0x000c00, 0x000c1f) AM_READ(regs1_r)
 	AM_RANGE(0x080000, 0x0801ff) AM_READWRITE( pal_r, framebuffer1_palette_w )
@@ -48,29 +48,27 @@ MACHINE_CONFIG_END
 void kaneko_grap2_device::device_start()
 {
 	m_framebuffer = make_unique_clear<uint16_t[]>(0x80000/2);
-	m_framebuffer_palette = make_unique_clear<uint16_t[]>(0x200/2);
+	m_framebuffer_palette = make_unique_clear<uint16_t[]>(0x101);
 	m_framebuffer_unk1 = make_unique_clear<uint16_t[]>(0x400/2);
 	m_framebuffer_unk2 = make_unique_clear<uint16_t[]>(0x400/2);
 
 	save_pointer(NAME(m_framebuffer.get()), 0x80000/2);
-	save_pointer(NAME(m_framebuffer_palette.get()), 0x200/2);
+	save_pointer(NAME(m_framebuffer_palette.get()), 0x101);
 	save_pointer(NAME(m_framebuffer_unk1.get()), 0x400/2);
 	save_pointer(NAME(m_framebuffer_unk2.get()), 0x400/2);
 
-	save_item(NAME(m_framebuffer_bgcol));
 	save_item(NAME(m_framebuffer_scrolly));
 	save_item(NAME(m_framebuffer_scrollx));
 	save_item(NAME(m_framebuffer_enable));
 	save_item(NAME(m_regs1_i));
+	save_item(NAME(m_regs2));
 	save_item(NAME(m_framebuffer_bright1));
 	save_item(NAME(m_framebuffer_bright2));
-	save_item(NAME(m_regs1_address_regs[0x0]));
-	save_item(NAME(m_regs1_address_regs[0x1]));
+	save_item(NAME(m_regs1_address_regs));
 }
 
 void kaneko_grap2_device::device_reset()
 {
-	m_framebuffer_bgcol = 0;
 	m_framebuffer_scrolly = 0;
 	m_framebuffer_scrollx = 0;
 	m_framebuffer_enable = 0;
@@ -183,32 +181,11 @@ WRITE16_MEMBER(kaneko_grap2_device::framebuffer1_palette_w)
 /* definitely looks like a cycling bg colour used for the girls */
 WRITE16_MEMBER(kaneko_grap2_device::framebuffer1_bgcol_w)
 {
-	COMBINE_DATA(&m_framebuffer_bgcol);
-	set_color_555(0x100, 5, 10, 0, m_framebuffer_bgcol);
+	COMBINE_DATA(&m_framebuffer_palette[0x100]);
+	set_color_555(0x100, 5, 10, 0, m_framebuffer_palette[0x100]);
 }
 
-uint16_t kaneko_grap2_device::pen_r(int pen)
+uint32_t kaneko_grap2_device::pen_r(int pen)
 {
-	if ((m_brightreg & 0x1000) && (m_framebuffer_bright1 != 0xff))
-	{
-		uint32_t pal = m_palette->pens()[pen];
-		int r,g,b;
-		r = (pal & 0x00ff0000)>>16;
-		g = (pal & 0x0000ff00)>>8;
-		b = (pal & 0x000000ff)>>0;
-
-		r = (r * m_framebuffer_bright1) / 0xff;
-		g = (g * m_framebuffer_bright1) / 0xff;
-		b = (b * m_framebuffer_bright1) / 0xff;
-
-		pal = (r & 0x000000ff)<<16;
-		pal |=(g & 0x000000ff)<<8;
-		pal |=(b & 0x000000ff)<<0;
-
-		return pal;
-	}
-	else
-	{
-		return m_palette->pens()[pen];
-	}
+	return m_palette->pens()[pen];
 }

@@ -118,7 +118,6 @@ public:
 
 	uint32_t screen_update_galpani3(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect);
 	TIMER_DEVICE_CALLBACK_MEMBER(galpani3_vblank);
-	int gp3_is_alpha_pen(int pen);
 	void galpani3(machine_config &config);
 	void galpani3_map(address_map &map);
 };
@@ -164,73 +163,34 @@ void galpani3_state::video_start()
 	save_pointer(NAME(m_spc_regs.get()), 0x40/4);
 }
 
-
-
-int galpani3_state::gp3_is_alpha_pen(int pen)
-{
-	uint16_t dat = 0;
-
-	if (pen<0x4000)
-	{
-		dat = m_paletteram[pen];
+#define FB_DRAW_PIXEL(_chip, _pixel)                                                              \
+	int alpha = 0xff;                                                                             \
+	uint32_t pal = m_grap2[_chip]->pen_r(_pixel);                                                 \
+	if (m_grap2[_chip]->m_framebuffer_palette[_pixel] & 0x8000)                                   \
+	{                                                                                             \
+		alpha = (m_grap2[_chip]->m_framebuffer_bright2 & 0xff);                                   \
+	}                                                                                             \
+	else                                                                                          \
+	{                                                                                             \
+		alpha = (m_grap2[_chip]->m_framebuffer_bright1 & 0xff);                                   \
+	}                                                                                             \
+	if (alpha)                                                                                    \
+	{                                                                                             \
+		if (alpha == 0xff)                                                                        \
+			dst[drawx] = pal;                                                                     \
+		else                                                                                      \
+			dst[drawx] = alpha_blend_r32(dst[drawx], pal, alpha);                                 \
 	}
-	else if (pen<0x4100)
-	{
-		if ((m_grap2[0]->m_brightreg & 0x2000) == 0)
-			return 0;
-
-		dat = m_grap2[0]->m_framebuffer_palette[pen&0xff];
-	}
-	else if (pen<0x4200)
-	{
-		if ((m_grap2[1]->m_brightreg & 0x2000) == 0)
-			return 0;
-
-		dat = m_grap2[1]->m_framebuffer_palette[pen&0xff];
-	}
-	else if (pen<0x4300)
-	{
-		if ((m_grap2[2]->m_brightreg & 0x2000) == 0)
-			return 0;
-
-		dat = m_grap2[2]->m_framebuffer_palette[pen&0xff];
-	}
-	else if (pen<0x4301)
-	{
-		if ((m_grap2[0]->m_brightreg & 0x2000) == 0)
-			return 0;
-
-		dat = m_grap2[0]->m_framebuffer_bgcol;
-	}
-	else if (pen<0x4302)
-	{
-		if ((m_grap2[1]->m_brightreg & 0x2000) == 0)
-			return 0;
-
-		dat = m_grap2[1]->m_framebuffer_bgcol;
-	}
-	else if (pen<0x4303)
-	{
-		if ((m_grap2[2]->m_brightreg & 0x2000) == 0)
-			return 0;
-
-		dat = m_grap2[2]->m_framebuffer_bgcol;
-	}
-
-	if (dat&0x8000) return 1;
-	else return 0;
-}
-
 
 uint32_t galpani3_state::screen_update_galpani3(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
-	int x,y;
-	uint16_t* src1;
-	uint32_t* dst;
-	uint16_t pixdata1;
 	const pen_t *paldata = m_palette->pens();
+	
+	bitmap.fill(0, cliprect);
+	
+	m_sprite_bitmap.fill(0x0000, cliprect);
 
-	bitmap.fill(0x0000, cliprect);
+	m_spritegen->skns_draw_sprites(m_sprite_bitmap, cliprect, m_spriteram32.get(), 0x4000, m_spc_regs.get() );
 
 //  popmessage("%02x %02x", m_grap2[0]->m_framebuffer_bright2, m_grap2[1]->m_framebuffer_bright2);
 
@@ -238,124 +198,89 @@ uint32_t galpani3_state::screen_update_galpani3(screen_device &screen, bitmap_rg
 		int drawy, drawx;
 		for (drawy=cliprect.min_y;drawy<=cliprect.max_y;drawy++)
 		{
+			uint16_t* sprline  = &m_sprite_bitmap.pix16(drawy);
 			uint16_t* srcline1 = m_grap2[0]->m_framebuffer.get() + ((drawy+m_grap2[0]->m_framebuffer_scrolly+11)&0x1ff) * 0x200;
 			uint16_t* srcline2 = m_grap2[1]->m_framebuffer.get() + ((drawy+m_grap2[1]->m_framebuffer_scrolly+11)&0x1ff) * 0x200;
 			uint16_t* srcline3 = m_grap2[2]->m_framebuffer.get() + ((drawy+m_grap2[2]->m_framebuffer_scrolly+11)&0x1ff) * 0x200;
 
-			uint16_t*  priline  = m_priority_buffer + ((drawy+m_priority_buffer_scrolly+11)&0x1ff) * 0x200;
+			uint16_t* priline  = m_priority_buffer + ((drawy+m_priority_buffer_scrolly+11)&0x1ff) * 0x200;
+			
+			uint32_t* dst = &bitmap.pix32(drawy & 0x3ff);
 
 			for (drawx=cliprect.min_x;drawx<=cliprect.max_x;drawx++)
 			{
+				int sproffs  = drawx & 0x3ff;
 				int srcoffs1 = (drawx+m_grap2[0]->m_framebuffer_scrollx+67)&0x1ff;
 				int srcoffs2 = (drawx+m_grap2[1]->m_framebuffer_scrollx+67)&0x1ff;
 				int srcoffs3 = (drawx+m_grap2[2]->m_framebuffer_scrollx+67)&0x1ff;
 
 				int prioffs  = (drawx+m_priority_buffer_scrollx+66)&0x1ff;
 
-				uint8_t dat1 = srcline1[srcoffs1];
-				uint8_t dat2 = srcline2[srcoffs2];
-				uint8_t dat3 = srcline3[srcoffs3];
+				uint16_t sprdat = sprline[sproffs];
+				uint8_t  dat1 = srcline1[srcoffs1];
+				uint8_t  dat2 = srcline2[srcoffs2];
+				uint8_t  dat3 = srcline3[srcoffs3];
 
-				uint8_t pridat = priline[prioffs];
-
-				uint32_t* dst = &bitmap.pix32(drawy, drawx);
+				uint8_t  pridat = priline[prioffs];
 
 				// this is all wrong
 				if (pridat==0x0f) // relates to the area you've drawn over
 				{
+					if ((sprdat & 0xc000) == 0x0000)
+					{
+						dst[drawx] = paldata[sprdat & 0x3fff];
+					}
 					if (m_grap2[2]->m_framebuffer_enable)
 					{
-						uint16_t pen = dat3+0x4200;
-						uint32_t pal = m_grap2[2]->pen_r(pen & 0xff);
-
-						if (gp3_is_alpha_pen(pen))
-						{
-							int r,g,b;
-							r = (pal & 0x00ff0000)>>16;
-							g = (pal & 0x0000ff00)>>8;
-							b = (pal & 0x000000ff)>>0;
-
-							r = (r * m_grap2[2]->m_framebuffer_bright2) / 0xff;
-							g = (g * m_grap2[2]->m_framebuffer_bright2) / 0xff;
-							b = (b * m_grap2[2]->m_framebuffer_bright2) / 0xff;
-
-							pal = (r & 0x000000ff)<<16;
-							pal |=(g & 0x000000ff)<<8;
-							pal |=(b & 0x000000ff)<<0;
-
-							dst[0] |= pal;
-						}
-						else
-						{
-							dst[0] = pal;
-						}
+						FB_DRAW_PIXEL(2, dat3);
 					}
-
+					if ((sprdat & 0xc000) == 0x4000)
+					{
+						dst[drawx] = paldata[sprdat & 0x3fff];
+					}
 					if (dat1 && m_grap2[0]->m_framebuffer_enable)
 					{
-						uint16_t pen = dat1+0x4000;
-						uint32_t pal = m_grap2[0]->pen_r(pen & 0xff);
-
-						if (gp3_is_alpha_pen(pen))
-						{
-							int r,g,b;
-							r = (pal & 0x00ff0000)>>16;
-							g = (pal & 0x0000ff00)>>8;
-							b = (pal & 0x000000ff)>>0;
-
-							r = (r * m_grap2[0]->m_framebuffer_bright2) / 0xff;
-							g = (g * m_grap2[0]->m_framebuffer_bright2) / 0xff;
-							b = (b * m_grap2[0]->m_framebuffer_bright2) / 0xff;
-
-							pal = (r & 0x000000ff)<<16;
-							pal |=(g & 0x000000ff)<<8;
-							pal |=(b & 0x000000ff)<<0;
-
-							dst[0] = pal;
-						}
-						else
-						{
-							dst[0] = pal;
-						}
+						FB_DRAW_PIXEL(0, dat1);
 					}
-
+					if ((sprdat & 0xc000) == 0x8000)
+					{
+						dst[drawx] = paldata[sprdat & 0x3fff];
+					}
 					if (dat2 && m_grap2[1]->m_framebuffer_enable)
 					{
-						uint16_t pen = dat2+0x4100;
-						uint32_t pal = m_grap2[1]->pen_r(pen & 0xff);
-
-						if (gp3_is_alpha_pen(pen))
-						{
-							int r,g,b;
-							r = (pal & 0x00ff0000)>>16;
-							g = (pal & 0x0000ff00)>>8;
-							b = (pal & 0x000000ff)>>0;
-
-							r = (r * m_grap2[1]->m_framebuffer_bright2) / 0xff;
-							g = (g * m_grap2[1]->m_framebuffer_bright2) / 0xff;
-							b = (b * m_grap2[1]->m_framebuffer_bright2) / 0xff;
-
-							pal = (r & 0x000000ff)<<16;
-							pal |=(g & 0x000000ff)<<8;
-							pal |=(b & 0x000000ff)<<0;
-
-							dst[0] |= pal;
-						}
-						else
-						{
-							dst[0] = pal;
-						}
+						FB_DRAW_PIXEL(1, dat2);
+					}
+					if ((sprdat & 0xc000) == 0xc000)
+					{
+						dst[drawx] = paldata[sprdat & 0x3fff];
 					}
 				}
 				else if (pridat==0xcf) // the girl
 				{
+					if ((sprdat & 0xc000) == 0x0000)
+					{
+						dst[drawx] = paldata[sprdat & 0x3fff];
+					}
+					FB_DRAW_PIXEL(0, 0x100);
+					if ((sprdat & 0xc000) == 0x4000)
+					{
+						dst[drawx] = paldata[sprdat & 0x3fff];
+					}
+					if (m_grap2[1]->m_framebuffer_enable)
+					{
+						FB_DRAW_PIXEL(1, 0x100);
+					}
+					if ((sprdat & 0xc000) == 0x8000)
+					{
+						dst[drawx] = paldata[sprdat & 0x3fff];
+					}
 					if (dat3 && m_grap2[2]->m_framebuffer_enable)
 					{
-						dst[0] = m_grap2[2]->pen_r(dat2);
+						FB_DRAW_PIXEL(2, dat3);
 					}
-					else
+					if ((sprdat & 0xc000) == 0xc000)
 					{
-						dst[0] = m_grap2[0]->pen_r(0x100);
+						dst[drawx] = paldata[sprdat & 0x3fff];
 					}
 				}
 				else
@@ -363,136 +288,59 @@ uint32_t galpani3_state::screen_update_galpani3(screen_device &screen, bitmap_rg
 					/* this isn't right, but the registers have something to do with
 					   alpha / mixing, and bit 0x8000 of the palette is DEFINITELY alpha
 					   enable -- see fading in intro */
+					if ((sprdat & 0xc000) == 0x0000)
+					{
+						dst[drawx] = paldata[sprdat & 0x3fff];
+					}
 					if (m_grap2[0]->m_framebuffer_enable)
 					{
-						uint16_t pen = dat1+0x4000;
-						uint32_t pal = m_grap2[0]->pen_r(pen & 0xff);
-
-						if (gp3_is_alpha_pen(pen))
-						{
-							int r,g,b;
-							r = (pal & 0x00ff0000)>>16;
-							g = (pal & 0x0000ff00)>>8;
-							b = (pal & 0x000000ff)>>0;
-
-							r = (r * m_grap2[0]->m_framebuffer_bright2) / 0xff;
-							g = (g * m_grap2[0]->m_framebuffer_bright2) / 0xff;
-							b = (b * m_grap2[0]->m_framebuffer_bright2) / 0xff;
-
-							pal = (r & 0x000000ff)<<16;
-							pal |=(g & 0x000000ff)<<8;
-							pal |=(b & 0x000000ff)<<0;
-
-							dst[0] = pal;
-						}
-						else
-						{
-							dst[0] = pal;
-						}
+						FB_DRAW_PIXEL(0, dat1);
 					}
-
+					if ((sprdat & 0xc000) == 0x4000)
+					{
+						dst[drawx] = paldata[sprdat & 0x3fff];
+					}
 					if (dat2 && m_grap2[1]->m_framebuffer_enable)
 					{
-						uint16_t pen = dat2+0x4100;
-						uint32_t pal = m_grap2[1]->pen_r(pen & 0xff);
-
-						if (gp3_is_alpha_pen(pen))
-						{
-							int r,g,b;
-							r = (pal & 0x00ff0000)>>16;
-							g = (pal & 0x0000ff00)>>8;
-							b = (pal & 0x000000ff)>>0;
-
-							r = (r * m_grap2[1]->m_framebuffer_bright2) / 0xff;
-							g = (g * m_grap2[1]->m_framebuffer_bright2) / 0xff;
-							b = (b * m_grap2[1]->m_framebuffer_bright2) / 0xff;
-
-							pal = (r & 0x000000ff)<<16;
-							pal |=(g & 0x000000ff)<<8;
-							pal |=(b & 0x000000ff)<<0;
-
-							dst[0] |= pal;
-						}
-						else
-						{
-							dst[0] = pal;
-						}
+						FB_DRAW_PIXEL(1, dat2);
 					}
-
+					if ((sprdat & 0xc000) == 0x8000)
+					{
+						dst[drawx] = paldata[sprdat & 0x3fff];
+					}
 					if (dat3 && m_grap2[2]->m_framebuffer_enable)
 					{
-						uint16_t pen = dat3+0x4200;
-						uint32_t pal = m_grap2[2]->pen_r(pen & 0xff);
-
-						if (gp3_is_alpha_pen(pen))
-						{
-							int r,g,b;
-							r = (pal & 0x00ff0000)>>16;
-							g = (pal & 0x0000ff00)>>8;
-							b = (pal & 0x000000ff)>>0;
-
-							r = (r * m_grap2[2]->m_framebuffer_bright2) / 0xff;
-							g = (g * m_grap2[2]->m_framebuffer_bright2) / 0xff;
-							b = (b * m_grap2[2]->m_framebuffer_bright2) / 0xff;
-
-							pal = (r & 0x000000ff)<<16;
-							pal |=(g & 0x000000ff)<<8;
-							pal |=(b & 0x000000ff)<<0;
-
-							dst[0] |= pal;
-						}
-						else
-						{
-							dst[0] = pal;
-						}
+						FB_DRAW_PIXEL(2, dat3);
+					}
+					if ((sprdat & 0xc000) == 0xc000)
+					{
+						dst[drawx] = paldata[sprdat & 0x3fff];
 					}
 				}
 
 				/*
 				else if (pridat==0x2f) // area outside of the girl
 				{
-				    //dst[0] = machine().rand()&0x3fff;
+				    //dst[drawx] = machine().rand()&0x3fff;
 				}
 
 				else if (pridat==0x00) // the initial line / box that gets drawn
 				{
-				    //dst[0] = machine().rand()&0x3fff;
+				    //dst[drawx] = machine().rand()&0x3fff;
 				}
 				else if (pridat==0x30) // during the 'gals boxes' on the intro
 				{
-				    //dst[0] = machine().rand()&0x3fff;
+				    //dst[drawx] = machine().rand()&0x3fff;
 				}
 				else if (pridat==0x0c) // 'nice' at end of level
 				{
-				    //dst[0] = machine().rand()&0x3fff;
+				    //dst[drawx] = machine().rand()&0x3fff;
 				}
 				else
 				{
 				    //printf("%02x, ",pridat);
 				}
 				*/
-			}
-		}
-	}
-
-
-	m_sprite_bitmap.fill(0x0000, cliprect);
-
-	m_spritegen->skns_draw_sprites(m_sprite_bitmap, cliprect, m_spriteram32.get(), 0x4000, m_spc_regs.get() );
-
-	// ignoring priority bits for now..
-	for (y=cliprect.min_y;y<=cliprect.max_y;y++)
-	{
-		src1 = &m_sprite_bitmap.pix16(y);
-		dst =  &bitmap.pix32(y);
-
-		for (x=cliprect.min_x;x<=cliprect.max_x;x++)
-		{
-			pixdata1 = src1[x];
-
-			if (pixdata1 & 0x3fff)
-			{
-				dst[x] = paldata[(pixdata1 & 0x3fff)];
 			}
 		}
 	}

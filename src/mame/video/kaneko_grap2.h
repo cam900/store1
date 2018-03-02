@@ -19,7 +19,6 @@ public:
 	void do_rle(uint32_t address);
 	void set_color_555(pen_t color, int rshift, int gshift, int bshift, uint16_t data);
 
-	uint16_t m_framebuffer_bgcol;
 	uint16_t m_framebuffer_scrolly;
 	uint16_t m_framebuffer_scrollx;
 	uint16_t m_framebuffer_enable;
@@ -29,7 +28,7 @@ public:
 	uint16_t m_framebuffer_bright2;
 
 	uint16_t m_regs1_address_regs[0x2];
-	uint16_t m_brightreg;
+	uint16_t m_regs2;
 
 	DECLARE_WRITE16_MEMBER(framebuffer1_enable_w) { m_framebuffer_enable = data; }
 
@@ -47,7 +46,7 @@ public:
 	DECLARE_WRITE16_MEMBER(framebuffer1_bgcol_w);
 
 	DECLARE_WRITE16_MEMBER(regs1_address_w) { COMBINE_DATA(&m_regs1_address_regs[offset]); }
-	DECLARE_WRITE16_MEMBER(brightreg_w) { COMBINE_DATA(&m_brightreg); }
+	DECLARE_WRITE16_MEMBER(regs2_w) { COMBINE_DATA(&m_regs2); }
 
 	DECLARE_READ16_MEMBER(  framebuffer_r ) { return m_framebuffer[offset]; }
 	DECLARE_WRITE16_MEMBER( framebuffer_w ) { COMBINE_DATA(&m_framebuffer[offset]); }
@@ -58,7 +57,7 @@ public:
 	DECLARE_READ16_MEMBER(  unk2_r ) { return m_framebuffer_unk2[offset]; }
 	DECLARE_WRITE16_MEMBER( unk2_w ) { COMBINE_DATA(&m_framebuffer_unk2[offset]); }
 
-	uint16_t pen_r(int pen) { return m_palette->pens()[pen]; }
+	uint32_t pen_r(int pen);
 
 	std::unique_ptr<uint16_t[]> m_framebuffer;
 	std::unique_ptr<uint16_t[]> m_framebuffer_palette;
