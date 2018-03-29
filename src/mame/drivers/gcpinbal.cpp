@@ -89,7 +89,6 @@ NOTE: Mask roms from Power Flipper Pinball Shooting have not been dumped, but as
 #include "speaker.h"
 
 
-
 /***********************************************************
                       INTERRUPTS
 ***********************************************************/
@@ -175,24 +174,25 @@ WRITE8_MEMBER(gcpinbal_state::es8712_reset_w)
                      MEMORY STRUCTURES
 ***********************************************************/
 
-ADDRESS_MAP_START(gcpinbal_state::gcpinbal_map)
-	AM_RANGE(0x000000, 0x1fffff) AM_ROM
-	AM_RANGE(0xc00000, 0xc03fff) AM_READWRITE(gcpinbal_tilemaps_word_r, gcpinbal_tilemaps_word_w) AM_SHARE("tilemapram")
-	AM_RANGE(0xc80000, 0xc81fff) AM_DEVREADWRITE8("spritegen", excellent_spr_device, read, write, 0x00ff)
-	AM_RANGE(0xd00000, 0xd00fff) AM_RAM_DEVWRITE("palette", palette_device, write16) AM_SHARE("palette")
-	AM_RANGE(0xd80010, 0xd8002f) AM_RAM_WRITE(d80010_w) AM_SHARE("d80010")
-	AM_RANGE(0xd80040, 0xd8005b) AM_WRITE8(d80040_w, 0x00ff)
-	AM_RANGE(0xd80060, 0xd80077) AM_RAM_WRITE(d80060_w) AM_SHARE("d80060")
-	AM_RANGE(0xd80080, 0xd80081) AM_READ_PORT("DSW")
-	AM_RANGE(0xd80084, 0xd80085) AM_READ_PORT("IN0")
-	AM_RANGE(0xd80086, 0xd80087) AM_READ_PORT("IN1")
-	AM_RANGE(0xd80088, 0xd80089) AM_WRITE8(bank_w, 0xff00)
-	AM_RANGE(0xd8008a, 0xd8008b) AM_WRITE8(eeprom_w, 0xff00)
-	AM_RANGE(0xd8008e, 0xd8008f) AM_WRITE8(es8712_reset_w, 0xff00)
-	AM_RANGE(0xd800a0, 0xd800a1) AM_MIRROR(0x2) AM_DEVREADWRITE8("oki", okim6295_device, read, write, 0xff00)
-	AM_RANGE(0xd800c0, 0xd800cd) AM_DEVWRITE8("essnd", es8712_device, write, 0xff00)
-	AM_RANGE(0xff0000, 0xffffff) AM_RAM /* RAM */
-ADDRESS_MAP_END
+void gcpinbal_state::gcpinbal_map(address_map &map)
+{
+	map(0x000000, 0x1fffff).rom();
+	map(0xc00000, 0xc03fff).rw(this, FUNC(gcpinbal_state::gcpinbal_tilemaps_word_r), FUNC(gcpinbal_state::gcpinbal_tilemaps_word_w)).share("tilemapram");
+	map(0xc80000, 0xc81fff).rw(m_sprgen, FUNC(excellent_spr_device::read), FUNC(excellent_spr_device::write)).umask16(0x00ff);
+	map(0xd00000, 0xd00fff).ram().w(m_palette, FUNC(palette_device::write16)).share("palette");
+	map(0xd80010, 0xd8002f).ram().w(this, FUNC(gcpinbal_state::d80010_w)).share("d80010");
+	map(0xd80040, 0xd8005b).w(this, FUNC(gcpinbal_state::d80040_w)).umask16(0x00ff);
+	map(0xd80060, 0xd80077).ram().w(this, FUNC(gcpinbal_state::d80060_w)).share("d80060");
+	map(0xd80080, 0xd80081).portr("DSW");
+	map(0xd80084, 0xd80085).portr("IN0");
+	map(0xd80086, 0xd80087).portr("IN1");
+	map(0xd80088, 0xd80088).w(this, FUNC(gcpinbal_state::bank_w));
+	map(0xd8008a, 0xd8008a).w(this, FUNC(gcpinbal_state::eeprom_w));
+	map(0xd8008e, 0xd8008e).w(this, FUNC(gcpinbal_state::es8712_reset_w));
+	map(0xd800a0, 0xd800a0).mirror(0x2).rw(m_oki, FUNC(okim6295_device::read), FUNC(okim6295_device::write));
+	map(0xd800c0, 0xd800cd).w(m_essnd, FUNC(es8712_device::write)).umask16(0xff00);
+	map(0xff0000, 0xffffff).ram(); /* RAM */
+}
 
 
 
@@ -296,10 +296,10 @@ static const gfx_layout charlayout =
 	16,16,  /* 16*16 characters */
 	RGN_FRAC(1,1),
 	4,  /* 4 bits per pixel */
-	{ 0, 1, 2, 3 },
-	{ 2*4, 3*4, 0*4, 1*4, 6*4, 7*4, 4*4, 5*4, 2*4+32, 3*4+32, 0*4+32, 1*4+32, 6*4+32, 7*4+32, 4*4+32, 5*4+32 },
-	{ 0*64, 1*64, 2*64, 3*64, 4*64, 5*64, 6*64, 7*64, 8*64, 9*64, 10*64, 11*64, 12*64, 13*64, 14*64, 15*64 },
-	128*8   /* every sprite takes 128 consecutive bytes */
+	{ STEP4(0,1) },
+	{ STEP16(0,4) },
+	{ STEP16(0,4*16) },
+	16*16*4   /* every sprite takes 128 consecutive bytes */
 };
 
 static const gfx_layout char_8x8_layout =
@@ -307,10 +307,10 @@ static const gfx_layout char_8x8_layout =
 	8,8,    /* 8*8 characters */
 	RGN_FRAC(1,1),
 	4,  /* 4 bits per pixel */
-	{ 0, 1, 2, 3 },
-	{ 2*4, 3*4, 0*4, 1*4, 6*4, 7*4, 4*4, 5*4 },
-	{ 0*32, 1*32, 2*32, 3*32, 4*32, 5*32, 6*32, 7*32 },
-	32*8    /* every sprite takes 32 consecutive bytes */
+	{ STEP4(0,1) },
+	{ STEP8(0,4) },
+	{ STEP8(0,4*8) },
+	8*8*4    /* every sprite takes 32 consecutive bytes */
 };
 
 static const gfx_layout tilelayout =
@@ -320,15 +320,15 @@ static const gfx_layout tilelayout =
 	4,  /* 4 bits per pixel */
 //  { 16, 48, 0, 32 },
 	{ 48, 16, 32, 0 },
-	{ 8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7 },
-	{ 0*64, 1*64, 2*64, 3*64, 4*64, 5*64, 6*64, 7*64, 8*64, 9*64, 10*64, 11*64, 12*64, 13*64, 14*64, 15*64 },
-	128*8   /* every sprite takes 128 consecutive bytes */
+	{ STEP16(0,1) },
+	{ STEP16(0,16*4) },
+	16*16*4   /* every sprite takes 128 consecutive bytes */
 };
 
 static GFXDECODE_START( gcpinbal )
-	GFXDECODE_ENTRY( "gfx3", 0, tilelayout,       0, 256 )  /* sprites & playfield */
-	GFXDECODE_ENTRY( "gfx1", 0, charlayout,       0, 256 )  /* sprites & playfield */
-	GFXDECODE_ENTRY( "gfx2", 0, char_8x8_layout,  0, 256 )  /* sprites & playfield */
+	GFXDECODE_ENTRY( "sprite", 0, tilelayout,       0, 256 )  /* sprites & playfield */
+	GFXDECODE_ENTRY( "bg0", 0, charlayout,       0, 256 )  /* sprites & playfield */
+	GFXDECODE_ENTRY( "fg0", 0, char_8x8_layout,  0, 256 )  /* sprites & playfield */
 GFXDECODE_END
 
 
@@ -418,15 +418,15 @@ ROM_START( pwrflip ) /* Updated version of Grand Cross Pinball or semi-sequel? *
 	ROM_LOAD16_WORD_SWAP( "p.f.u45",       0x100000, 0x80000, CRC(6ad1a457) SHA1(8746c38efa05e3318e9b1a371470d149803fb6bb) )
 	ROM_LOAD16_WORD_SWAP( "p.f.u46",       0x180000, 0x80000, CRC(e0f3a1b4) SHA1(761dddf374a92c1a1e4a211ead215d5be461a082) )
 
-	ROM_REGION( 0x200000, "gfx1", 0 )  /* BG0 (16 x 16) */
-	ROM_LOAD( "u1",      0x000000, 0x100000, CRC(afa459bb) SHA1(7a7c64bcb80d71b8cf3fdd3209ef109997b6417c) ) /* 23C8000 MASK ROMs */
-	ROM_LOAD( "u6",      0x100000, 0x100000, CRC(c3f024e5) SHA1(d197e2b715b154fc64ff9a61f8c6df111d6fd446) )
+	ROM_REGION( 0x200000, "bg0", 0 )  /* BG0 (16 x 16) */
+	ROM_LOAD16_WORD_SWAP( "u1",      0x000000, 0x100000, CRC(afa459bb) SHA1(7a7c64bcb80d71b8cf3fdd3209ef109997b6417c) ) /* 23C8000 MASK ROMs */
+	ROM_LOAD16_WORD_SWAP( "u6",      0x100000, 0x100000, CRC(c3f024e5) SHA1(d197e2b715b154fc64ff9a61f8c6df111d6fd446) )
 
-	ROM_REGION( 0x020000, "gfx2", 0 )  /* FG0 (8 x 8) */
-	ROM_LOAD( "p.f.u10",   0x000000, 0x020000, CRC(50e34549) SHA1(ca1808513ff3feb8bcd34d9aafd7b374e4244732) )
+	ROM_REGION( 0x020000, "fg0", 0 )  /* FG0 (8 x 8) */
+	ROM_LOAD16_WORD_SWAP( "p.f.u10",   0x000000, 0x020000, CRC(50e34549) SHA1(ca1808513ff3feb8bcd34d9aafd7b374e4244732) )
 
-	ROM_REGION( 0x200000, "gfx3", 0 )  /* Sprites (16 x 16) */
-	ROM_LOAD( "u13",     0x000000, 0x200000, CRC(62f3952f) SHA1(7dc9ccb753d46b6aaa791bcbf6e18e6d872f6b79) ) /* 23C16000 MASK ROM */
+	ROM_REGION( 0x200000, "sprite", 0 )  /* Sprites (16 x 16) */
+	ROM_LOAD16_WORD_SWAP( "u13",     0x000000, 0x200000, CRC(62f3952f) SHA1(7dc9ccb753d46b6aaa791bcbf6e18e6d872f6b79) ) /* 23C16000 MASK ROM */
 
 	ROM_REGION( 0x080000, "oki", 0 )   /* M6295 acc to Raine */
 	ROM_LOAD( "u55",   0x000000, 0x080000, CRC(b3063351) SHA1(825e63e8a824d67d235178897528e5b0b41e4485) ) /* OKI M534001B MASK ROM */
@@ -442,15 +442,15 @@ ROM_START( gcpinbal )
 	ROM_LOAD16_WORD_SWAP( "3_excellent.u45",  0x100000, 0x80000, CRC(0511ad56) SHA1(e0602ece514126ce719ebc9de6649ebe907be904) )
 	ROM_LOAD16_WORD_SWAP( "4_excellent.u46",  0x180000, 0x80000, CRC(e0f3a1b4) SHA1(761dddf374a92c1a1e4a211ead215d5be461a082) )
 
-	ROM_REGION( 0x200000, "gfx1", 0 )  /* BG0 (16 x 16) */
-	ROM_LOAD( "u1",      0x000000, 0x100000, CRC(afa459bb) SHA1(7a7c64bcb80d71b8cf3fdd3209ef109997b6417c) ) /* 23C8000 MASK ROMs */
-	ROM_LOAD( "u6",      0x100000, 0x100000, CRC(c3f024e5) SHA1(d197e2b715b154fc64ff9a61f8c6df111d6fd446) )
+	ROM_REGION( 0x200000, "bg0", 0 )  /* BG0 (16 x 16) */
+	ROM_LOAD16_WORD_SWAP( "u1",      0x000000, 0x100000, CRC(afa459bb) SHA1(7a7c64bcb80d71b8cf3fdd3209ef109997b6417c) ) /* 23C8000 MASK ROMs */
+	ROM_LOAD16_WORD_SWAP( "u6",      0x100000, 0x100000, CRC(c3f024e5) SHA1(d197e2b715b154fc64ff9a61f8c6df111d6fd446) )
 
-	ROM_REGION( 0x020000, "gfx2", 0 )  /* FG0 (8 x 8) */
-	ROM_LOAD( "1_excellent.u10",   0x000000, 0x020000, CRC(79321550) SHA1(61f1b772ed8cf95bfee9df8394b0c3ff727e8702) )
+	ROM_REGION( 0x020000, "fg0", 0 )  /* FG0 (8 x 8) */
+	ROM_LOAD16_WORD_SWAP( "1_excellent.u10",   0x000000, 0x020000, CRC(79321550) SHA1(61f1b772ed8cf95bfee9df8394b0c3ff727e8702) )
 
-	ROM_REGION( 0x200000, "gfx3", 0 )  /* Sprites (16 x 16) */
-	ROM_LOAD( "u13",     0x000000, 0x200000, CRC(62f3952f) SHA1(7dc9ccb753d46b6aaa791bcbf6e18e6d872f6b79) ) /* 23C16000 MASK ROM */
+	ROM_REGION( 0x200000, "sprite", 0 )  /* Sprites (16 x 16) */
+	ROM_LOAD16_WORD_SWAP( "u13",     0x000000, 0x200000, CRC(62f3952f) SHA1(7dc9ccb753d46b6aaa791bcbf6e18e6d872f6b79) ) /* 23C16000 MASK ROM */
 
 	ROM_REGION( 0x080000, "oki", 0 )   /* M6295 acc to Raine */
 	ROM_LOAD( "u55",   0x000000, 0x080000, CRC(b3063351) SHA1(825e63e8a824d67d235178897528e5b0b41e4485) ) /* OKI M534001B MASK ROM */

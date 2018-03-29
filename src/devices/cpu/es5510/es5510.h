@@ -14,7 +14,7 @@
 
 class es5510_device : public cpu_device {
 public:
-	// TODO : Not verified
+	// TODO : Not verified, Most of games are using 128KB DRAM.
 	static constexpr uint32_t DRAM_SIZE = (1<<20);
 	static constexpr uint32_t DRAM_MASK = (DRAM_SIZE-1);
 	static constexpr feature_type imperfect_features() { return feature::SOUND; }
@@ -136,7 +136,7 @@ protected:
 	virtual uint32_t execute_input_lines() const override;
 	virtual void execute_run() override;
 	virtual void execute_set_input(int linenum, int state) override;
-	virtual util::disasm_interface *create_disassembler() override;
+	virtual std::unique_ptr<util::disasm_interface> create_disassembler() override;
 
 	int32_t alu_operation(uint8_t op, int32_t aValue, int32_t bValue, uint8_t &flags);
 	void alu_operation_end();

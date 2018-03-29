@@ -1,6 +1,6 @@
 // license:BSD-3-Clause
-// copyright-holders:Quench
-/* An interface for the ES8712 ADPCM chip */
+// copyright-holders:Quench, David Graves, R. Belmont
+/* An interface for the ES8712 ADPCM controller */
 
 #ifndef MAME_SOUND_ES8712_H
 #define MAME_SOUND_ES8712_H
@@ -40,14 +40,14 @@ public:
 
 	// configuration
 	void set_msm_tag(const char *tag) { m_msm.set_tag(tag); }
-	template <class Object> devcb_base &set_reset_handler(Object &&cb) { return m_reset_handler.set_callback(std::forward<Object>(cb)); }
-	template<class Object> devcb_base &set_msm_write_callback(Object &&object) { return m_msm_write_cb.set_callback(std::forward<Object>(object)); }
+	template<class Object> devcb_base &set_reset_handler(Object &&cb) { return m_reset_handler.set_callback(std::forward<Object>(cb)); }
+	template<class Object> devcb_base &set_msm_write_callback(Object &&cb) { return m_msm_write_cb.set_callback(std::forward<Object>(cb)); }
 
 	DECLARE_WRITE8_MEMBER(write);
 	DECLARE_READ8_MEMBER(read);
 	DECLARE_WRITE8_MEMBER(msm_w);
 	DECLARE_WRITE_LINE_MEMBER(msm_int);
-	
+
 	void play();
 
 protected:
@@ -63,7 +63,7 @@ private:
 
 	required_device<hct157_device> m_adpcm_select;
 	optional_device<msm5205_device> m_msm;
-	
+
 	// device callbacks
 	devcb_write_line m_reset_handler;
 	devcb_write8 m_msm_write_cb;
